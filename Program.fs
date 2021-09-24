@@ -24,11 +24,12 @@ type Operator =
 type Block = Stmt list
 
 and Stmt =
+  | Scope of Block
   | Let of string * Expr
-  | If of Expr * Stmt * Block
-  | While of Expr * Block
-  | For of Stmt * Expr * Stmt * Block
-  | Fun of string * string list * Block
+  | If of Expr * Stmt * Stmt option
+  | While of Expr * Stmt
+  | For of Stmt * Expr * Stmt * Stmt
+  | Fun of string * string list * Stmt
   | Return of Expr
 
 and Expr = 
@@ -92,10 +93,13 @@ let exprP, exprPImpl = declParser()
 let stmtP, stmtPImpl = declParser()
 
 let groupP = parens exprP
-let blockP = many stmtP
+let blockP =
+  many stmtP
+  <* (guard ((=) '}') look |> delete <|> eof)
 let scopeP = 
   between (one '{') blockP (one '}')
   |> whitespacedP
+  |>> Scope
 
 // === Expression parsing ===
 let varP = identP |>> Var
@@ -157,7 +161,7 @@ let whileP =
   |>> While
 let funP =
   keywordP "fun" *> identP
-  <+> parens (sepBy1 identP (one ','))
+  <+> parens (sepBy identP (one ','))
   <+> scopeP
   |>> fun ((name, parms), body) -> Fun (name, parms, body)
 let forP =
@@ -167,10 +171,16 @@ let forP =
     <+> assignmentP)
   <+> scopeP
   |>> fun (((a, b), c), d) -> For (a, b, c, d)
+let ifP, ifPImpl = declParser()
+ifPImpl :=
+  keywordP "if" *> parens exprP
+  <+> scopeP
+  <+> opt (keywordP "else" *> scopeP <|> ifP)
+  |>> fun ((cond, body), alt) -> If (cond, body, alt)
 
-// TODO: If, swizzles
+// TODO: swizzles
 stmtPImpl :=
-  (funP <|> whileP <|> forP <|> attempt (assignmentP <* one ';') <|> returnP)
+  (funP <|> ifP <|> whileP <|> forP <|> attempt (assignmentP <* one ';') <|> returnP)
   |> whitespacedP
 
 let dataSrc = 
@@ -203,12 +213,24 @@ fun march(ro, rd)
 
 let p = 2.0 * (uv() - 0.5);
 let ro = float3(0.0, 0.0, -1.0);
-let rd = normalize(float3(p.x, p.y, 1));
+let rd = normalize(float3(p, p, 1));
 
-let d = march(ro, rd);"
+let d = march(ro, rd);
+if (d < 1)
+{
+    let hit = ro + d * rd;
+    let a = map(hit+float3(0.01, 0, 0)) - map(hit-float3(0.01, 0, 0));
+    let b = map(hit+float3(0, 0.01, 0)) - map(hit-float3(0, 0.01, 0));
+    let c = map(hit+float3(0, 0, 0.01)) - map(hit-float3(0, 0, 0.01));
+    normalize(float3(a, b, c)) * 0.5 + 0.5
+}
+else
+{
+    0
+}"
   |> mkMultiLineParser
 
-let result, state = (blockP) dataSrc
+let result, state = blockP dataSrc
 match result with
-| Success v -> printfn "%A\n %A" v state
+| Success v -> printfn "Result: %A\n\nState: %A" v state 
 | _ -> printfn "Error: %A" state
