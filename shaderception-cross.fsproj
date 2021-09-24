@@ -11,7 +11,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="Program.fs" />
+    <Compile Include="src/Parse.fs" />
+    <Compile Include="src/Typecheck.fs" />
   </ItemGroup>
 
 </Project>
