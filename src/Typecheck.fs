@@ -1,9 +1,9 @@
-#nowarn "40"
+module Typecheck
 
+#nowarn "40"
 open Combinator
 open Common
 open Parse
-open Util
 
 // === Typed AST ===
 type Type =
@@ -152,10 +152,15 @@ let rec getStmtType ftab vtab stmt =
         stmts
         |> List.tryLast
         |> Option.map extractRetType
-      let parmsT =
+      let lets =
         stmts
         |> List.map (fun x -> match x with LetT (ty, id, _) -> Some (ty, id) | _ -> None)
         |> List.choose id
+      let parmsT =
+        parms
+        |> List.map (fun x -> List.tryFind (snd >> (=) x) lets)
+        |> List.zip parms
+        |> List.map (fun (idt, tup) -> tup |> Option.map fst |> Option.defaultValue Hole, idt)
       match retT with
       | Some retT -> Some (FunT (retT, name, parmsT, ScopeT stmts))
       | None -> None
@@ -169,7 +174,7 @@ let fillHole ty =
   if ty = Hole then Float4
   else ty
 
-let rec fillHoles stmt : StmtT =
+let rec fillHoles stmt =
   match stmt with
   | ScopeT body -> 
     ScopeT (body |> List.map (fillHoles))
@@ -190,25 +195,9 @@ let typecheck ast =
   getStmtType [] [] ast
   |> Option.map (fillHoles)
 
-let dataSrc = 
-  //System.IO.File.ReadAllText("test.psl")
-  "fun smin(d1, d2)
-{
-    dot(d1, d2) + float2(0,0)
-}"
-  |> mkMultiLineParser
-
-// TODO: Handle globals oof
-let result, state = blockP dataSrc
-let ast = 
-  match result with
-  | Success v ->
-    //printfn "Result: %A\n\nState: %A" v state
-    v
-  | _ -> failwith (sprintf "Error: %A" state)
-
-let funs, stmts = List.partition (fun x -> match x with Fun _ -> true | _ -> false) ast
-funs
-|> List.head
-|> typecheck
-|> printfn "%A"
+(*
+  Idea:
+    Split into global / non global area
+    Start at the first non global binding
+    Recursively infer types statement by statement
+*)
