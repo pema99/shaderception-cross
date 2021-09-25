@@ -91,7 +91,7 @@ let rec getExprType ftab vtab expr =
       parms
       |> List.map (getExprType ftab vtab)
       |> List.choose id
-      |> List.fold promote Hole
+      |> List.fold promote Float
     let ret = 
       lookup ftab idt
       |> Option.orElse (getBuiltinType idt)
