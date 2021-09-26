@@ -106,6 +106,20 @@ fun march(ro, rd)
 let p = 2.0 * (uv() - 0.5);
 let ro = float3(0.0, 0.0, -1.0);
 let rd = normalize(float3(p, p, 1));
+
+let d = march(ro, rd);
+if (d < 1)
+{
+    let hit = ro + d * rd;
+    let a = map(hit+float3(0.01, 0, 0)) - map(hit-float3(0.01, 0, 0));
+    let b = map(hit+float3(0, 0.01, 0)) - map(hit-float3(0, 0.01, 0));
+    let c = map(hit+float3(0, 0, 0.01)) - map(hit-float3(0, 0, 0.01));
+    normalize(float3(a, b, c)) * 0.5 + 0.5
+}
+else
+{
+    0
+}
 "
   |> mkMultiLineParser
 
