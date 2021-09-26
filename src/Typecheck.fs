@@ -185,38 +185,3 @@ let rec inferStmtType ftab vtab stmt =
     | _ -> None
 
 let typecheck ast = inferStmtType [] [] ast
-
-(*
-  Idea:
-    Split into global / non global area
-    Start at the first non global binding
-    Recursively infer types statement by statement
-*)
-
-
-// Options:
-// - Inline everything and proceed as you have been doing
-// - Figure out how to:
-//   - Make function parameter types depend on caller use
-
-(*
-  Mark idea:
-    - When you first encounter a function definition, type check it with type variables and
-    store the result into a big table of function ASTs. This will yield a half-typed result,
-    that just shows constraints (remember Union <list> type)
-    - When you encounter an expression, simply infer the type
-    - When you encounter a function call in an expression, typecheck it again with more
-    precise inputs (inferred at callsite). Store the improved AST in the big table
-    - When done typechecking main-function expressions, go through the table of functions
-    and emit code for each one.
-
-    Probably have something like
-    type Type =
-      TUnion of Type list
-      TVar of string
-      Float
-      Float2
-      Float3
-      Float4
-      Void
-*)
