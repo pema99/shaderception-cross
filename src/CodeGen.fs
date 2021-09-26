@@ -28,13 +28,16 @@ let genOp op =
   | Or         -> "||"
 
 let genType ty =
-  match ty with
-  | Float -> "float"
-  | Float2 -> "float2"
-  | Float3 -> "float3"
-  | Float4 -> "float4"
-  | Void -> "void"
-  | Hole -> "float4"
+  let rec cont ty level = 
+    if level > 3 then "[Union]"
+    else
+      match ty with
+      | TVec i when i = 1 -> "float"
+      | TVec i -> sprintf "float%i" i
+      | TVoid -> "void"
+      | TVar a -> sprintf "[%s]" a
+      | _ -> cont (rep ty) (level + 1)
+  cont ty 0
 
 let rec genExpr expr =
   match expr with
@@ -67,7 +70,7 @@ let rec genStmt level stmt =
     let parms =
       parms
       |> List.map (fun (ty, id) -> sprintf "%s %s" (genType ty) id)
-      |> String.concat ","
+      |> String.concat ", "
     sprintf "%s%s %s(%s)\n%s" (indent level) (genType ret) id parms (genStmt level body)
   | ReturnT (_, e) ->
     sprintf "%sreturn %s;" (indent level) (genExpr e)
@@ -103,20 +106,7 @@ fun march(ro, rd)
 let p = 2.0 * (uv() - 0.5);
 let ro = float3(0.0, 0.0, -1.0);
 let rd = normalize(float3(p, p, 1));
-
-let d = march(ro, rd);
-if (d < 1)
-{
-    let hit = ro + d * rd;
-    let a = map(hit+float3(0.01, 0, 0)) - map(hit-float3(0.01, 0, 0));
-    let b = map(hit+float3(0, 0.01, 0)) - map(hit-float3(0, 0.01, 0));
-    let c = map(hit+float3(0, 0, 0.01)) - map(hit-float3(0, 0, 0.01));
-    normalize(float3(a, b, c)) * 0.5 + 0.5
-}
-else
-{
-    0
-}"
+"
   |> mkMultiLineParser
 
 // TODO: Handle globals oof
@@ -130,3 +120,4 @@ Scope ast
 |> typecheck
 |> Option.map (genStmt 0)
 |> printfn "%A"
+
