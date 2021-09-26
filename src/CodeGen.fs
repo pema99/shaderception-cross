@@ -48,36 +48,64 @@ let rec genExpr expr =
   | Call (idt, parms) -> sprintf "%s(%s)" idt (parms |> List.map genExpr |> String.concat ", ")
 
 let indent level =
-  Seq.init level (konst "\t") |> String.concat ""
+  Seq.init (max level 0) (konst "\t") |> String.concat ""
 
-let rec genStmt level stmt =
+let rec genStmt level (vtab: Set<string>) stmt =
   match stmt with
   | ScopeT body ->
-    sprintf "%s{\n%s\n%s}\n" (indent level) (body |> List.map (genStmt (level + 1)) |> String.concat "\n") (indent level)
+    let bodyG = // handle multiple declarations (only assignments exist in PSL)
+      body
+      |> List.fold (fun (stmts, vtab) stmt ->
+        let vtabn =
+          match stmt with
+          | LetT (_, id, _) -> Set.add id vtab
+          | _ -> vtab
+        genStmt (level + 1) vtab stmt :: stmts, vtabn
+      ) ([], vtab)
+      |> fst
+      |> List.rev
+      |> String.concat "\n"
+    sprintf "%s{\n%s\n%s}\n" (indent level) bodyG (indent level)
   | LetT (ty, id, init) ->
-    sprintf "%s%s %s = %s;" (indent level) (genType ty) id (genExpr init)
+    if Set.contains id vtab then sprintf "%s%s = %s;" (indent level) id (genExpr init)
+    else sprintf "%s%s %s = %s;" (indent level) (genType ty) id (genExpr init)
   | IfT (cond, body, alt) ->
     let rest = 
       match alt with
-      | Some alt -> sprintf "%selse\n%s" (indent level) (genStmt level alt)
+      | Some alt -> sprintf "%selse\n%s" (indent level) (genStmt level vtab alt)
       | None -> "" 
-    sprintf "%sif (%s)\n%s%s" (indent level) (genExpr cond) (genStmt level body) rest
+    sprintf "%sif (%s)\n%s%s" (indent level) (genExpr cond) (genStmt level vtab body) rest
   | WhileT (cond, body) ->
-    sprintf "%swhile (%s)\n%s" (indent level) (genExpr cond) (genStmt level body)
+    sprintf "%swhile (%s)\n%s" (indent level) (genExpr cond) (genStmt level vtab body)
   | ForT (decl, cond, iter, body) ->
-    sprintf "%sfor (%s %s; %s)\n%s" (indent level) (genStmt level decl) (genExpr cond) (genStmt level iter) (genStmt level body)
+    sprintf "%sfor (%s %s; %s)\n%s" (indent level) (genStmt level vtab decl) (genExpr cond) (genStmt level vtab iter) (genStmt level vtab body)
   | FunT (ret, id, parms, body) ->
     let parms =
       parms
       |> List.map (fun (ty, id) -> sprintf "%s %s" (genType ty) id)
       |> String.concat ", "
-    sprintf "%s%s %s(%s)\n%s" (indent level) (genType ret) id parms (genStmt level body)
+    sprintf "%s%s %s(%s)\n%s" (indent level) (genType ret) id parms (genStmt level vtab body)
   | ReturnT (_, e) ->
     sprintf "%sreturn %s;" (indent level) (genExpr e)
 
+let genSegment block =
+  let gen = genStmt -1 Set.empty (ScopeT block)
+  gen.[1 .. Seq.length gen - 3]
+
+let genCode ast =
+  match ast with
+  | ScopeT v ->
+    let funs, main = List.partition (fun x -> match x with FunT _ -> true | _ -> false) v
+    let funsC = genSegment funs
+    let main = FunT (extractRetType (ScopeT main), "main", [], (ScopeT main))
+    let mainC = genStmt 0 Set.empty main
+    funsC + mainC
+  | _ -> genStmt 0 Set.empty ast
+
 let dataSrc = 
+  "sin(time().y)*0.3"
   //System.IO.File.ReadAllText("test.psl")
-  "fun smin(d1, d2, k)
+  (*"fun smin(d1, d2, k)
 {
     let h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
     lerp(d2, d1, h) - k * h * (1.0 - h)
@@ -120,18 +148,18 @@ else
 {
     0
 }
-"
+"*)
   |> mkMultiLineParser
 
 // TODO: Handle globals oof
 let result, state = blockP dataSrc
 let ast = 
   match result with
-  | Success v -> v
+  | Success v -> printfn "%A" v; v
   | _ -> failwith (sprintf "Error: %A" state)
 //printfn "%A" ast
 Scope ast
 |> typecheck
-|> Option.map (genStmt 0)
+|> Option.map genCode
 |> printfn "%A"
 
