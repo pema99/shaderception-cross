@@ -4,6 +4,7 @@ module Typecheck
 open Combinator
 open Common
 open Parse
+open Util
 
 // === Vtable ===
 let lookup vtab id = List.tryFind (fst >> (=) id) vtab |> Option.map snd
@@ -84,6 +85,10 @@ let getBuiltinType id =
   | "length" | "all" | "any" -> Some (TVec 1, [TVar "a"])
   | _ -> None
 
+// === Monomorphization hack ===
+// TODO: Actual monomorphization. This doesn't support generics. Also it's cringe
+let mutable fdict = []
+
 // === Typechecking ===
 let rec extractRetType stmt =
   match stmt with
@@ -120,9 +125,14 @@ let rec inferExprType ftab vtab expr =
     let parmsT = List.map (inferExprType ftab vtab) parms
     if List.forall Option.isSome parmsT then
       let parmsT = List.choose id parmsT
-      lookup ftab ident
-      |> Option.orElse (getBuiltinType ident)
-      |> Option.map (inferRetType parmsT)
+      let retT = 
+        lookup ftab ident
+        |> Option.orElse (getBuiltinType ident)
+        |> Option.map (inferRetType parmsT)
+      match retT with // Cringe monomorphization
+      | Some retT -> fdict <- insert fdict ident (retT, parmsT)
+      | _ -> ()
+      retT
     else None
 
 let rec inferStmtType ftab vtab stmt =
@@ -174,49 +184,28 @@ let rec inferStmtType ftab vtab stmt =
     if List.forall Option.isSome bodyT then Some (ScopeT (List.choose id bodyT))
     else None
   | Fun (name, parms, body) ->
-    let parmsT = List.map (fun x -> x, TVar (name + "_" +  x)) parms
-    let vtab = parmsT @ vtab
-    let bodyT = inferStmtType ftab vtab body
-    match bodyT with
-    | Some (ScopeT _ as block) ->
-      let retT = extractRetType block
-      let parmsT = parmsT |> List.map (fun (ident, ty) -> if equiv ty retT then retT, ident else ty, ident)
-      Some (FunT (retT, name, parmsT, block))
-    | _ -> None
+    match lookup fdict name with
+    | Some (retT, parmsT) -> // Cringe monomorphism
+      let parmsT = List.zip parms parmsT
+      let vtab = parmsT @ vtab
+      let bodyT = inferStmtType ftab vtab body
+      match bodyT with
+      | Some (ScopeT _ as block) ->
+        let parmsT = parmsT |> List.map (fun (ident, ty) -> if equiv ty retT then retT, ident else ty, ident)
+        Some (FunT (retT, name, parmsT, block))
+      | _ -> None
+    | None ->
+      let parmsT = List.map (fun x -> x, TVar (name + "_" +  x)) parms
+      let vtab = parmsT @ vtab
+      let bodyT = inferStmtType ftab vtab body
+      match bodyT with
+      | Some (ScopeT _ as block) ->
+        let retT = extractRetType block
+        let parmsT = parmsT |> List.map (fun (ident, ty) -> if equiv ty retT then retT, ident else ty, ident)
+        Some (FunT (retT, name, parmsT, block))
+      | _ -> None
 
-let typecheck ast = inferStmtType [] [] ast
-
-(*
-  Idea:
-    Split into global / non global area
-    Start at the first non global binding
-    Recursively infer types statement by statement
-*)
-
-
-// Options:
-// - Inline everything and proceed as you have been doing
-// - Figure out how to:
-//   - Make function parameter types depend on caller use
-
-(*
-  Mark idea:
-    - When you first encounter a function definition, type check it with type variables and
-    store the result into a big table of function ASTs. This will yield a half-typed result,
-    that just shows constraints (remember Union <list> type)
-    - When you encounter an expression, simply infer the type
-    - When you encounter a function call in an expression, typecheck it again with more
-    precise inputs (inferred at callsite). Store the improved AST in the big table
-    - When done typechecking main-function expressions, go through the table of functions
-    and emit code for each one.
-
-    Probably have something like
-    type Type =
-      TUnion of Type list
-      TVar of string
-      Float
-      Float2
-      Float3
-      Float4
-      Void
-*)
+let typecheck ast =
+  fdict <- []
+  ignore <| inferStmtType [] [] ast
+  inferStmtType [] [] ast
