@@ -44,12 +44,12 @@ let rep l =
 let unify l r =
   match l, r with
   | TUnion (r1, u), TUnion (_, v) -> TUnion (r1, u @ v) // Union 2 sets with either rep
-  | TVar _, TVar _ -> TUnion (l, [r])                   // Two type var, make union
+  | TVar _, TVar _ -> TUnion (l, [l; r])                // Two type var, make union
   | TVec u, TVec v -> TVec (max u v)                    // Same basic type, return implicit cast
-  | TVec 1, TVar _ -> TUnion (r, [l; r])                // Basic type and var, make union (handle cast)
-  | TVar _, TVec 1 -> TUnion (l, [l; r])           
-  | TVec 1, TUnion (r1, u) -> TUnion (r1, l :: u)       // Basic type and union, replace rep (handle cast)
-  | TUnion (r1, u), TVec 1 -> TUnion (r1, r :: u)
+  | TVec 1, TVar _ -> TUnion (r, [r])                   // Basic type and var, make union (handle cast)
+  | TVar _, TVec 1 -> TUnion (l, [l])           
+  | TVec 1, TUnion _ -> r                               // Basic type and union, replace rep (handle cast)
+  | TUnion _, TVec 1 -> l
   | TVar _, TUnion (r1, u) -> TUnion (r1, l :: u)       // Var and union, merge
   | TUnion (r1, u), TVar _ -> TUnion (r1, r :: u)       
   | TVec _, TVar _ -> TUnion (l, [r])                   // Basic type and var, make union
