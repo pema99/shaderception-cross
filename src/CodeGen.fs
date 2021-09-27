@@ -125,6 +125,6 @@ let main args =
     |> typecheck
     |> Option.map genCode
     |> Option.map (fun x -> template.Replace("__CODE_GOES_HERE__", x))
-    |> Option.map (fun x -> System.IO.File.WriteAllText("test.shader", x))
+    |> Option.map (fun x -> System.IO.File.WriteAllText(args.[0] + ".shader", x))
     |> ignore
   0
