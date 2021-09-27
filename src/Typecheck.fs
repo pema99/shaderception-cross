@@ -94,8 +94,7 @@ let getBuiltinType id =
   | "uv" | "xy" | "resolution" -> Some (TVec 2, [])
   | "time" | "self" | "deltatime" | "button" | "axis" -> Some (TVec 4, [])
   | "camera" | "video" -> Some (TVec 4, [TVec 2])
-  | "dot" -> Some (TVec 1, [TVar "a"])
-  | "distance" -> Some (TVec 1, [TVar "a"; TVar "a"])
+  | "dot" | "distance" -> Some (TVec 1, [TVar "a"; TVar "a"])
   | "length" | "all" | "any" -> Some (TVec 1, [TVar "a"])
   | _ -> None
 

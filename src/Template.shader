@@ -43,6 +43,11 @@ Shader "Unlit/PSL"
             {
                 return globaluv;
             }
+
+            float2 xy()
+            {
+                return float2(2.0 * (globaluv - 0.5) * 10.0);
+            }
             
             float4 time()
             {
@@ -63,6 +68,8 @@ Shader "Unlit/PSL"
             float4 __cast(float2 a) { return float4(a, 0, 1); }
             float4 __cast(float3 a) { return float4(a, 1); }
             float4 __cast(float4 a) { return a; }
+
+            #define mod(x,y) (((x)-(y)*floor((x)/(y)))) 
             
             // === Begin user code ===
             __CODE_GOES_HERE__
@@ -70,7 +77,9 @@ Shader "Unlit/PSL"
             float4 frag (v2f i) : SV_Target
             {
                 globaluv = i.uv;
-                return __cast(main());
+                float4 col = __cast(main());
+                col.rgb = LinearToGammaSpace(col.rgb);
+                return col;
             }
             ENDCG
         }
