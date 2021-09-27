@@ -2,7 +2,11 @@
 A simultaneous attempt at dogfooding my [parser combinator library](https://github.com/pema99/plonk), cross compiling [Shaderception language](https://github.com/pema99/Shaderception) to (Unity) HLSL, and understanding type inference methods better.
 
 # How to build
-Install dotnet core and do `dotnet run <path_to_shader>` or `dotnet build` and invoke the compiled binary manually. A resulting Unity shader file will be put into the same path as the input file.
+- `git clone https://github.com/pema99/shaderception-cross`
+- `cd shaderception-cross`
+- `git submodule update --init --recursive`
+
+Next, install dotnet core and do `dotnet run <path_to_shader>` or `dotnet build` and invoke the compiled binary manually. A resulting Unity shader file will be put into the same path as the input file.
 
 # Caveats
 - Global variables aren't currently supported.
