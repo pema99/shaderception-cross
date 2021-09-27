@@ -25,7 +25,7 @@ type Block = Stmt list
 
 and Stmt =
   | Scope of Block
-  | Let of string * Expr
+  | Let of string * string option * Expr
   | If of Expr * Stmt * Stmt option
   | While of Expr * Stmt
   | For of Stmt * Expr * Stmt * Stmt
@@ -35,6 +35,7 @@ and Stmt =
 and Expr = 
   | Literal of float
   | Var of string
+  | Swizzle of Expr * string
   | BinOp of Expr * Operator * Expr
   | UnOp of Operator * Expr
   | Call of string * Expr list
@@ -42,7 +43,7 @@ and Expr =
 // === Helpers ===
 let isAlpha c = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 let isNumeric c = (c >= '0' && c <= '9')
-let isAlphaNumeric c = isAlpha c || isNumeric c || (c = '.') || (c = '_')
+let isAlphaNumeric c = isAlpha c || isNumeric c || (c = '_')
 let mkString = List.toArray >> String
 let whitespaceP = many (oneOf [' '; '\r'; '\n'; '\t']) *> just ()
 let whitespacedP p = between whitespaceP p whitespaceP
@@ -102,7 +103,15 @@ let scopeP =
   |>> Scope
 
 // === Expression parsing ===
-let varP = identP |>> Var
+let swizzleP = 
+  one '.' *> eatWhile1 (fun x -> Seq.contains x "xyzwrgba")
+  |>> List.toArray |>> String
+let swizzledP p = 
+  attempt (p 
+  <+> swizzleP
+  |>> fun (e, i) -> Swizzle (e, i))
+  <|> p
+let varP = swizzledP (identP |>> Var)
 let callP = 
   identP
   <+> parens (sepBy exprP (one ','))
@@ -125,7 +134,7 @@ let specificBinOpP op =
   *> just (curry <| fun (l, r) -> BinOp (l, op, r))
 let chooseBinOpP = List.map (specificBinOpP) >> choice
 
-let termP = groupP <|> attempt callP <|> literalP <|> varP <|> unOpP
+let termP = swizzledP (groupP <|> attempt callP <|> literalP <|> varP <|> unOpP)
 let mulDivP = chainL1 termP (chooseBinOpP [Star; Slash])
 let addSubP = chainL1 mulDivP (chooseBinOpP [Plus; Minus])
 let comparisonP = chainL1 addSubP (chooseBinOpP [GreaterEq; LessEq; Greater; Less; NotEq; Equal])
@@ -133,22 +142,29 @@ let boolOpP = chainL1 comparisonP (chooseBinOpP [And; Or])
 exprPImpl := whitespacedP boolOpP
 
 // === Statement parsing ===
-let mathAssignP op impl ident =
+let mathAssignP op impl ident swizzle =
   specificOperatorP op *> exprP
-  |>> fun e -> Let (ident, BinOp (Var ident, impl, e))
-let incrAssignP op impl ident =
-  specificOperatorP op *> 
-  (just <| Let (ident, BinOp (Var ident, impl, Literal 1.0)))
-let assignmentContP ident =
-      incrAssignP PlusPlus Plus ident
-  <|> incrAssignP MinusMinus Minus ident
-  <|> mathAssignP PlusEq Plus ident
-  <|> mathAssignP MinusEq Minus ident
-  <|> mathAssignP StarEq Star ident
-  <|> mathAssignP SlashEq Slash ident
-  <|> (one ('=') *> exprP |>> fun e -> Let (ident, e))
+  |>> fun e ->
+    match swizzle with
+    | Some v -> Let (ident, swizzle, BinOp (Swizzle (Var ident, v), impl, e))
+    | None -> Let (ident, None, BinOp (Var ident, impl, e))
+let incrAssignP op impl ident swizzle =
+  specificOperatorP op *> (
+    match swizzle with
+    | Some v -> Let (ident, None, BinOp (Swizzle(Var ident, v), impl, Literal 1.0)) 
+    | None -> Let (ident, None, BinOp (Var ident, impl, Literal 1.0)) 
+    |> just)
+let assignmentContP (ident, swizzle) =
+      incrAssignP PlusPlus Plus ident swizzle
+  <|> incrAssignP MinusMinus Minus ident swizzle
+  <|> mathAssignP PlusEq Plus ident swizzle
+  <|> mathAssignP MinusEq Minus ident swizzle
+  <|> mathAssignP StarEq Star ident swizzle
+  <|> mathAssignP SlashEq Slash ident swizzle
+  <|> (one ('=') *> exprP |>> fun e -> Let (ident, swizzle, e))
 let assignmentP =
-  opt (keywordP "let" <|> keywordP "set") *> identP 
+  opt (keywordP "let" <|> keywordP "set") *> identP
+  <+> opt swizzleP
   >>= assignmentContP
 
 let returnP = 
@@ -178,7 +194,6 @@ ifPImpl :=
   <+> opt (keywordP "else" *> scopeP <|> ifP)
   |>> fun ((cond, body), alt) -> If (cond, body, alt)
 
-// TODO: swizzles
 stmtPImpl :=
   (funP <|> ifP <|> whileP <|> forP <|> attempt (assignmentP <* one ';') <|> returnP)
   |> whitespacedP

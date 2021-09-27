@@ -31,7 +31,7 @@ type BlockT = StmtT list
 
 and StmtT =
   | ScopeT of BlockT
-  | LetT of Type * string * Expr
+  | LetT of Type * string * string option * Expr
   | IfT of Expr * StmtT * StmtT option
   | WhileT of Expr * StmtT
   | ForT of StmtT * Expr * StmtT * StmtT
@@ -126,6 +126,7 @@ let rec inferExprType ctab ftab vtab expr =
   match expr with
   | Literal _ -> Some (TVec 1, ctab)
   | Var ident -> lookup vtab ident |> Option.map (fun x -> x, ctab)
+  | Swizzle (_, i) -> Some (TVec (String.length i), ctab)
   | BinOp (l, _, r) ->
     match inferExprType ctab ftab vtab l, inferExprType ctab ftab vtab r with
     | Some (l, ctab1), Some (r, ctab2) ->
@@ -146,9 +147,9 @@ let rec inferExprType ctab ftab vtab expr =
 
 let rec inferStmtType ctab ftab vtab stmt =
   match stmt with
-  | Let (id, init) ->
+  | Let (id, swizzle, init) ->
     inferExprType ctab ftab vtab init
-    |> Option.map (fun (ty, ctab) -> LetT (ty, id, init), ctab)
+    |> Option.map (fun (ty, ctab) -> LetT (ty, id, swizzle, init), ctab)
   | If (cond, body, alt) ->
     let bodyT = inferStmtType ctab ftab vtab body
     let altT = Option.bind (inferStmtType ctab ftab vtab) alt
@@ -186,10 +187,10 @@ let rec inferStmtType ctab ftab vtab stmt =
             ctab, ftab, vtab, Some a :: stmts
           | None ->
             ctab, ftab, vtab, None :: stmts
-        | Let (id, _) -> 
+        | Let (id, _, _) -> 
           let ty = inferStmtType ctab ftab vtab stmt
           match ty with
-          | Some (LetT (tyT, _, _), ctab) ->
+          | Some (LetT (tyT, _, _, _), ctab) ->
             ctab, ftab, insert vtab id tyT, Option.map fst ty :: stmts
           | Some (a, ctab) ->
             ctab, ftab, vtab, Some a :: stmts
