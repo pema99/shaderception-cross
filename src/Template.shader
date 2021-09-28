@@ -38,15 +38,15 @@ Shader "Unlit/PSL"
             sampler2D _Video;
 
             // === Begin standard library ===
-            static float2 globaluv;
+            static float2 __globaluv;
             float2 uv()
             {
-                return globaluv;
+                return __globaluv;
             }
 
             float2 xy()
             {
-                return float2(2.0 * (globaluv - 0.5) * 10.0);
+                return float2(2.0 * (__globaluv - 0.5) * 10.0);
             }
             
             float4 time()
@@ -76,7 +76,7 @@ Shader "Unlit/PSL"
 
             float4 frag (v2f i) : SV_Target
             {
-                globaluv = i.uv;
+                __globaluv = i.uv;
                 float4 col = __cast(main());
                 col.rgb = LinearToGammaSpace(col.rgb);
                 return col;
