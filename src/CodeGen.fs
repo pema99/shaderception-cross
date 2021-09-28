@@ -44,8 +44,8 @@ let rec genExpr expr =
   | Literal v -> string v
   | Var id -> id
   | Swizzle (e, i) -> sprintf "(%s).%s" (genExpr e) i
-  | BinOp (l, op, r) -> sprintf "(%s %s %s)" (genExpr l) (genOp op) (genExpr r)
-  | UnOp (op, r) -> sprintf "%s %s" (genOp op) (genExpr r)
+  | BinOp (l, op, r) -> sprintf "(%s) %s (%s)" (genExpr l) (genOp op) (genExpr r)
+  | UnOp (op, r) -> sprintf "(%s%s)" (genOp op) (genExpr r)
   | Call (idt, parms) -> sprintf "%s(%s)" idt (parms |> List.map genExpr |> String.concat ", ")
 
 let indent level =
@@ -80,7 +80,9 @@ let rec genStmt level (vtab: Set<string>) stmt =
   | WhileT (cond, body) ->
     sprintf "%swhile (%s)\n%s" (indent level) (genExpr cond) (genStmt level vtab body)
   | ForT (decl, cond, iter, body) ->
-    sprintf "%sfor (%s %s; %s)\n%s" (indent level) (genStmt level vtab decl) (genExpr cond) (genStmt level vtab iter) (genStmt level vtab body)
+    let last = (genStmt 0 vtab iter)
+    let last = last.[.. String.length last - 2]
+    sprintf "%sfor (%s %s; %s)\n%s" (indent level) (genStmt 0 vtab decl) (genExpr cond) last (genStmt level vtab body)
   | FunT (ret, id, parms, body) ->
     let parms =
       parms

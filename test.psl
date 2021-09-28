@@ -1,43 +1,33 @@
-fun smin(d1, d2, k)
+fun squareComplex(z)
 {
-    let h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
-    lerp(d2, d1, h) - k * h * (1.0 - h)
+	float2(
+		z.x * z.x - z.y * z.y,
+		z.x * z.y + z.y * z.x
+	)
 }
-
-fun map(p)
-{
-    let d1 = length(p) - 0.3;
-    let d2 = length(p + float3(0.2, sin(time().y)*0.3, 0)) - 0.3;
-    smin(d1, d2, 0.05)
+fun squareLength(a) {
+	a.x * a.x + a.y * a.y
 }
-
-fun march(ro, rd)
+let maxSteps = 20;
+let o = uv();
+let p = float2(-2.5 + (1.0 - (-2.5)) * o.x, -1.7 + (1.7 - (-1.7)) * o.y);
+let z = p / (mod(time().y, 20.0) / 3.0);
+let steps = 0;
+let i = 0;
+while (i < maxSteps)
 {
-    let t = 0;
-    let i = 0;
-    while (i < 15)
-    {
-        let dist = map(ro + t * rd);
-        let t = t + dist;
-        let i = i + 1;
+    if (squareLength(z) < 4.0)
+    { 
+        z = squareComplex(z) + p;
+        steps++;
     }
-    t
+    i++;
 }
-
-let p = 2.0 * (uv() - 0.5);
-let ro = float3(0.0, 0.0, -1.0);
-let rd = normalize(float3(p.x, p.y, 1));
-
-let d = march(ro, rd);
-if (d < 1)
+if (steps == maxSteps)
 {
-    let hit = ro + d * rd;
-    let a = map(hit+float3(0.01, 0, 0)) - map(hit-float3(0.01, 0, 0));
-    let b = map(hit+float3(0, 0.01, 0)) - map(hit-float3(0, 0.01, 0));
-    let c = map(hit+float3(0, 0, 0.01)) - map(hit-float3(0, 0, 0.01));
-    normalize(float3(a, b, c)) * 0.5 + 0.5
+    float4(1.0, 0.0, 0.0, 1.0)
 }
 else
 {
-    0
+    float4(steps / 15.0, 0.0, 0.0, steps / 15.0)
 }

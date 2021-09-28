@@ -150,23 +150,31 @@ let rec inferStmtType ctab ftab vtab stmt =
     inferExprType ctab ftab vtab init
     |> Option.map (fun (ty, ctab) -> LetT (ty, id, swizzle, init), ctab)
   | If (cond, body, alt) ->
+    let condT = inferExprType ctab ftab vtab cond
     let bodyT = inferStmtType ctab ftab vtab body
     let altT = Option.bind (inferStmtType ctab ftab vtab) alt
-    match bodyT, altT with
-    | Some (bodyT, ctab1), Some (altT, ctab2) -> Some (IfT (cond, bodyT, Some altT), ctab1 @ ctab2 |> dedup)
+    match condT, bodyT, altT with
+    | Some (_, ctab1), Some (bodyT, ctab2), Some (altT, ctab3) -> Some (IfT (cond, bodyT, Some altT), ctab1 @ ctab2 @ ctab3 |> dedup)
+    | Some (_, ctab1), Some (bodyT, ctab2), None -> Some (IfT (cond, bodyT, None), ctab1 @ ctab2 |> dedup)
     | _ -> None
   | While (cond, body) ->
+    let condT = inferExprType ctab ftab vtab cond
     let bodyT = inferStmtType ctab ftab vtab body
-    match bodyT with
-    | Some (bodyT, ctab) -> Some (WhileT (cond, bodyT), ctab)
+    match condT, bodyT with
+    | Some (_, ctab1), Some (bodyT, ctab2) -> Some (WhileT (cond, bodyT), ctab1 @ ctab2 |> dedup)
     | _ -> None
   | For (decl, cond, iter, body) ->
+    let condT = inferExprType ctab ftab vtab cond
     let declT = inferStmtType ctab ftab vtab decl
+    let vtab =
+      match declT with
+      | Some (LetT (ty, ident, _, _), _) -> insert vtab ident ty
+      | _ -> vtab
     let iterT = inferStmtType ctab ftab vtab iter
     let bodyT = inferStmtType ctab ftab vtab body
-    match declT, iterT, bodyT with
-    | Some (declT, ctab1), Some (iterT, ctab2), Some (bodyT, ctab3) ->
-      Some (ForT (declT, cond, iterT, bodyT), ctab1 @ ctab2 @ ctab3 |> dedup)
+    match declT, condT, iterT, bodyT with
+    | Some (declT, ctab1), Some(_, ctab2), Some (iterT, ctab3), Some (bodyT, ctab4) ->
+      Some (ForT (declT, cond, iterT, bodyT), ctab1 @ ctab2 @ ctab3 @ ctab4 |> dedup)
     | _ -> None
   | Return e ->
     match inferExprType ctab ftab vtab e with

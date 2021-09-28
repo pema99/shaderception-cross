@@ -43,6 +43,11 @@ Shader "Unlit/PSL"
             {
                 return globaluv;
             }
+
+            float2 xy()
+            {
+                return float2(2.0 * (globaluv - 0.5) * 10.0);
+            }
             
             float4 time()
             {
@@ -63,53 +68,47 @@ Shader "Unlit/PSL"
             float4 __cast(float2 a) { return float4(a, 0, 1); }
             float4 __cast(float3 a) { return float4(a, 1); }
             float4 __cast(float4 a) { return a; }
+
+            #define mod(x,y) (((x)-(y)*floor((x)/(y)))) 
             
             // === Begin user code ===
             
-float smin(float d1, float d2, float k)
+float2 squareComplex(float2 z)
 {
-    float h = clamp((0.5 + ((0.5 * (d2 - d1)) / k)), 0, 1);
-    return (lerp(d2, d1, h) - ((k * h) * (1 - h)));
+    return float2((((z).x) * ((z).x)) - (((z).y) * ((z).y)), (((z).x) * ((z).y)) + (((z).y) * ((z).x)));
 }
 
-float map(float3 p)
+float squareLength(float2 a)
 {
-    float d1 = (length(p) - 0.3);
-    float d2 = (length((p + float3(0.2, (sin((time()).y) * 0.3), 0))) - 0.3);
-    return smin(d1, d2, 0.05);
+    return (((a).x) * ((a).x)) + (((a).y) * ((a).y));
 }
 
-float march(float3 ro, float3 rd)
+float4 main()
 {
-    float t = 0;
+    float maxSteps = 20;
+    float2 o = uv();
+    float2 p = float2((-(2.5) + (((1) - ((-2.5))) * ((o).x))), (-(1.7) + (((1.7) - ((-1.7))) * ((o).y))));
+    float2 z = (p) / ((mod((time()).y, 20)) / (3));
+    float steps = 0;
     float i = 0;
-    while ((i < 15))
+    while ((i) < (maxSteps))
     {
-        float dist = map((ro + (t * rd)));
-        t = (t + dist);
-        i = (i + 1);
+        if ((squareLength(z)) < (4))
+        {
+            z = (squareComplex(z)) + (p);
+            steps = (steps) + (1);
+        }
+
+        i = (i) + (1);
     }
 
-    return t;
-}
-
-float3 main()
-{
-    float2 p = (2 * (uv() - 0.5));
-    float3 ro = float3(0, 0, - 1);
-    float3 rd = normalize(float3((p).x, (p).y, 1));
-    float d = march(ro, rd);
-    if ((d < 1))
+    if ((steps) == (maxSteps))
     {
-        float3 hit = (ro + (d * rd));
-        float a = (map((hit + float3(0.01, 0, 0))) - map((hit - float3(0.01, 0, 0))));
-        float b = (map((hit + float3(0, 0.01, 0))) - map((hit - float3(0, 0.01, 0))));
-        float c = (map((hit + float3(0, 0, 0.01))) - map((hit - float3(0, 0, 0.01))));
-        return ((normalize(float3(a, b, c)) * 0.5) + 0.5);
+        return float4(1, 0, 0, 1);
     }
     else
     {
-        return 0;
+        return float4((steps) / (15), 0, 0, (steps) / (15));
     }
 
 }
@@ -118,7 +117,9 @@ float3 main()
             float4 frag (v2f i) : SV_Target
             {
                 globaluv = i.uv;
-                return __cast(main());
+                float4 col = __cast(main());
+                col.rgb = LinearToGammaSpace(col.rgb);
+                return col;
             }
             ENDCG
         }
